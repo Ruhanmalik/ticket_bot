@@ -7,6 +7,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.action_chains import ActionChains
 
 def send_comp_tickets_from_csv(csv_file_path, ticket_type="General", delay=3, pause_every=10):
     """
@@ -26,32 +27,7 @@ def send_comp_tickets_from_csv(csv_file_path, ticket_type="General", delay=3, pa
     print(f"📊 Total people: {len(csv_reader)}")
     print(f"⏸️  Will pause every {pause_every} submissions\n")
     
-    # DEBUG: Check what ticket types are available
-    try:
-        print("🔍 Checking available ticket types...")
-        dropdown_element = driver.find_element(By.XPATH, "//select")
-        
-        # Click to open dropdown
-        dropdown_element.click()
-        time.sleep(0.5)  # Wait for dropdown to open
-        
-        dropdown = Select(dropdown_element)
-        options = [option.text for option in dropdown.options]
-        print(f"📋 Available ticket types: {options}\n")
-        
-        if ticket_type not in options:
-            print(f"⚠️  Warning: '{ticket_type}' not found in dropdown!")
-            print(f"Available options are: {options}")
-            new_type = input(f"Enter the exact ticket type name to use (or 'cancel'): ").strip()
-            if new_type.lower() == 'cancel':
-                print("❌ Cancelled")
-                return
-            ticket_type = new_type
-    except Exception as e:
-        print(f"⚠️  Could not read dropdown options: {e}")
-        print("Continuing anyway...")
-    
-    response = input("\nReady to start? (yes/no): ").strip().lower()
+    response = input("Ready to start? (yes/no): ").strip().lower()
     if response != 'yes':
         print("❌ Cancelled")
         return
@@ -72,52 +48,102 @@ def send_comp_tickets_from_csv(csv_file_path, ticket_type="General", delay=3, pa
             print(f"\n[{index}/{len(csv_reader)}] {first_name} {last_name} ({email}) - Qty: {quantity}")
             
             try:
-                wait = WebDriverWait(driver, 10)
+                wait = WebDriverWait(driver, 15)
                 
                 # Fill in First Name
                 first_name_field = wait.until(
-                    EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Jane']"))
+                    EC.element_to_be_clickable((By.XPATH, "//input[@placeholder='Jane']"))
                 )
                 first_name_field.clear()
                 first_name_field.send_keys(first_name)
+                time.sleep(0.2)
                 
                 # Fill in Last Name
-                last_name_field = driver.find_element(By.XPATH, "//input[@placeholder='Doe']")
+                last_name_field = wait.until(
+                    EC.element_to_be_clickable((By.XPATH, "//input[@placeholder='Doe']"))
+                )
                 last_name_field.clear()
                 last_name_field.send_keys(last_name)
+                time.sleep(0.2)
                 
                 # Fill in Email
-                email_field = driver.find_element(By.XPATH, "//input[@placeholder='jane@example.com']")
+                email_field = wait.until(
+                    EC.element_to_be_clickable((By.XPATH, "//input[@placeholder='jane@example.com']"))
+                )
                 email_field.clear()
                 email_field.send_keys(email)
+                time.sleep(0.2)
                 
-                # Select Ticket Type - Click to open dropdown first
-                dropdown_element = driver.find_element(By.XPATH, "//select")
-                dropdown_element.click()  # Open the dropdown
-                time.sleep(0.3)  # Brief wait for dropdown to open
+                # Select Ticket Type
+                dropdown_element = wait.until(
+                    EC.element_to_be_clickable((By.XPATH, "//select"))
+                )
+                driver.execute_script("arguments[0].scrollIntoView(true);", dropdown_element)
+                time.sleep(0.3)
+                dropdown_element.click()
+                time.sleep(0.3)
                 
                 ticket_type_select = Select(dropdown_element)
                 ticket_type_select.select_by_visible_text(ticket_type)
+                time.sleep(0.2)
                 
                 # Set Quantity
-                quantity_field = driver.find_element(By.XPATH, "//input[@type='number']")
+                quantity_field = wait.until(
+                    EC.element_to_be_clickable((By.XPATH, "//input[@type='number']"))
+                )
                 quantity_field.clear()
+                time.sleep(0.1)
                 quantity_field.send_keys(quantity)
+                time.sleep(0.2)
                 
                 # Clear Comp Reason
-                comp_reason_field = driver.find_element(By.XPATH, "//input[@placeholder='Volunteer staff']")
+                comp_reason_field = wait.until(
+                    EC.presence_of_element_located((By.XPATH, "//input[@placeholder='Volunteer staff']"))
+                )
                 comp_reason_field.clear()
+                time.sleep(0.2)
                 
                 # Check checkbox
-                email_checkbox = driver.find_element(By.XPATH, "//input[@type='checkbox']")
+                email_checkbox = wait.until(
+                    EC.element_to_be_clickable((By.XPATH, "//input[@type='checkbox']"))
+                )
                 if not email_checkbox.is_selected():
                     email_checkbox.click()
+                time.sleep(0.2)
                 
-                # Click Send button
-                send_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Send Comp Tickets')]")
-                send_button.click()
+                # Click Send Comp Tickets button
+                print("    📤 Clicking 'Send Comp Tickets' button...")
+                send_button = wait.until(
+                    EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Send Comp Tickets')]"))
+                )
+                driver.execute_script("arguments[0].scrollIntoView(true);", send_button)
+                time.sleep(0.3)
                 
+                # Use JavaScript click as backup if regular click doesn't work
+                try:
+                    send_button.click()
+                except:
+                    driver.execute_script("arguments[0].click();", send_button)
+                
+                print("    ⏳ Waiting for redirect to Orders page...")
                 time.sleep(delay)
+                
+                # Wait for redirect to Orders page and click "+ Comp Tickets" to go back
+                try:
+                    print("    🔄 Looking for '+ Comp Tickets' button...")
+                    comp_tickets_button = wait.until(
+                        EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Comp Tickets')] | //*[contains(text(), '+ Comp Tickets')]"))
+                    )
+                    print("    ✓ Found button, clicking to return to form...")
+                    comp_tickets_button.click()
+                    time.sleep(1)  # Wait for form to load
+                    print("    ✓ Back at form")
+                except Exception as e:
+                    print(f"    ⚠️  Could not find '+ Comp Tickets' button: {e}")
+                    # Try navigating directly back to the form
+                    print("    🔄 Navigating directly back to form...")
+                    driver.get("https://ticketbud.com/admin/events/fe2e84b6-f627-11f0-bed6-42010a7170e9/orders/comps/new")
+                    time.sleep(2)
                 
                 print(f"    ✓ Sent {quantity} ticket(s)")
                 successful += 1
@@ -125,7 +151,17 @@ def send_comp_tickets_from_csv(csv_file_path, ticket_type="General", delay=3, pa
                 
             except Exception as e:
                 print(f"    ✗ Error: {str(e)}")
+                print(f"    Error type: {type(e).__name__}")
                 failed += 1
+                
+                # Try to recover by going back to the form
+                try:
+                    print("    🔄 Attempting to recover...")
+                    driver.get("https://ticketbud.com/admin/events/fe2e84b6-f627-11f0-bed6-42010a7170e9/orders/comps/new")
+                    time.sleep(2)
+                except:
+                    pass
+                
                 cont = input("    Continue? (yes/skip/stop): ").strip().lower()
                 if cont == 'stop':
                     break
