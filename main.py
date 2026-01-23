@@ -5,34 +5,47 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
+from selenium.webdriver.chrome.options import Options
 
-def send_comp_tickets_from_csv(csv_file_path, ticket_type="General", delay = 3):
+def send_comp_tickets_from_csv(csv_file_path, ticket_type="General", delay=3, pause_every=10):
     """
     Automate sending comp tickets from a CSV file.
-    
-    Args:
-        csv_file_path: Path to CSV file with columns: first_name, last_name, email
-        ticket_type: The ticket type to select from dropdown (default: "General")
-        delay: Delay between submissions in seconds (default: 2)
+    CSV columns: "first name", "last name", "email", "quantity"
     """
     
     # Read CSV file
     with open(csv_file_path, 'r') as file:
-        csv_reader = csv.DictReader(file)
+        csv_reader = list(csv.DictReader(file))
         
-        total_processed = 0
-        successful = 0
-        failed = 0
-        
-        for row in csv_reader:
-            first_name = row['first_name'].strip()
-            last_name = row['last_name'].strip()
+    if not csv_reader:
+        print("❌ CSV file is empty!")
+        return
+    
+    print(f"\n📋 CSV columns found: {list(csv_reader[0].keys())}")
+    print(f"📊 Total people: {len(csv_reader)}")
+    print(f"⏸️  Will pause every {pause_every} submissions\n")
+    
+    response = input("Ready to start? (yes/no): ").strip().lower()
+    if response != 'yes':
+        print("❌ Cancelled")
+        return
+    
+    total_processed = 0
+    successful = 0
+    failed = 0
+    total_tickets = 0
+    
+    try:
+        for index, row in enumerate(csv_reader, 1):
+            # Handle column names with spaces
+            first_name = row['first name'].strip()
+            last_name = row['last name'].strip()
             email = row['email'].strip()
+            quantity = row['quantity'].strip()
             
-            print(f"\n[{total_processed + 1}] Processing: {first_name} {last_name} ({email})")
+            print(f"\n[{index}/{len(csv_reader)}] {first_name} {last_name} ({email}) - Qty: {quantity}")
             
             try:
-                # Wait for form to be ready
                 wait = WebDriverWait(driver, 10)
                 
                 # Fill in First Name
@@ -53,76 +66,88 @@ def send_comp_tickets_from_csv(csv_file_path, ticket_type="General", delay = 3):
                 email_field.send_keys(email)
                 
                 # Select Ticket Type from dropdown
-                ticket_type_select = Select(driver.find_element(By.XPATH, "//select[contains(@class, 'ticket-type') or preceding-sibling::*[contains(text(), 'Ticket Type')]]"))
+                ticket_type_select = Select(driver.find_element(By.XPATH, "//select"))
                 ticket_type_select.select_by_visible_text(ticket_type)
                 
-                # Set Quantity to 1
-                quantity_field = driver.find_element(By.XPATH, "//input[@type='number' or @value='1']")
+                # Set Quantity
+                quantity_field = driver.find_element(By.XPATH, "//input[@type='number']")
                 quantity_field.clear()
-                quantity_field.send_keys("1")
+                quantity_field.send_keys(quantity)
                 
-                # Leave Comp Reason empty (clear it if it has any default value)
+                # Clear Comp Reason
                 comp_reason_field = driver.find_element(By.XPATH, "//input[@placeholder='Volunteer staff']")
                 comp_reason_field.clear()
                 
-                # Ensure "Send tickets via email" checkbox is checked
+                # Check checkbox
                 email_checkbox = driver.find_element(By.XPATH, "//input[@type='checkbox']")
                 if not email_checkbox.is_selected():
                     email_checkbox.click()
                 
-                # Click "Send Comp Tickets" button
+                # Click Send button
                 send_button = driver.find_element(By.XPATH, "//button[contains(text(), 'Send Comp Tickets')]")
                 send_button.click()
                 
-                # Wait for form to reset or success confirmation
                 time.sleep(delay)
                 
-                print(f"    ✓ Successfully sent ticket to {first_name} {last_name}")
+                print(f"    ✓ Sent {quantity} ticket(s)")
                 successful += 1
+                total_tickets += int(quantity)
                 
             except Exception as e:
-                print(f"    ✗ Error processing {first_name} {last_name}: {str(e)}")
+                print(f"    ✗ Error: {str(e)}")
                 failed += 1
+                cont = input("    Continue? (yes/skip/stop): ").strip().lower()
+                if cont == 'stop':
+                    break
+                elif cont == 'skip':
+                    continue
             
             total_processed += 1
-        
+            
+            # Pause checkpoint
+            if total_processed % pause_every == 0 and total_processed < len(csv_reader):
+                print(f"\n⏸️  Paused after {total_processed}")
+                print(f"   ✓ {successful} | ✗ {failed} | 🎟️ {total_tickets} tickets")
+                if input("   Continue? (yes/no): ").strip().lower() != 'yes':
+                    break
+    
+    except KeyboardInterrupt:
+        print("\n\n🛑 Interrupted by Ctrl+C")
+    
+    finally:
         # Summary
         print("\n" + "="*60)
         print(f"SUMMARY:")
-        print(f"Total processed: {total_processed}")
-        print(f"Successful: {successful}")
-        print(f"Failed: {failed}")
+        print(f"People: {total_processed}/{len(csv_reader)}")
+        print(f"Success: {successful} | Failed: {failed}")
+        print(f"Total tickets sent: {total_tickets}")
         print("="*60)
 
-# Usage example:
 if __name__ == "__main__":
-    # Setup: Make sure you have Selenium and the appropriate WebDriver installed
-    # pip install selenium
+    # Setup Chrome with persistent session (stays logged in)
+    chrome_options = Options()
+    chrome_options.add_argument("user-data-dir=./chrome_session")
     
-    # Initialize browser (uncomment and modify based on your browser)
-    driver = webdriver.Chrome()  # or webdriver.Safari(), webdriver.Firefox()
+    driver = webdriver.Chrome(options=chrome_options)
     
-    # Navigate to the comp tickets page
-    # driver.get("https://ticketbud.com/admin/events/7f49895a-f629-11f0-9f17-42010a7170e9/orders/comps/new")
-    # og one
-
-    driver.get("https://ticketbud.com/admin/events/fe2e84b6-f627-11f0-bed6-42010a7170e9/orders/comps/new")
-    # Wait for manual login if needed
-    input("Press Enter after you've logged in and are on the comp tickets page...")
-    
-    # Run the automation
-    csv_file = "test.csv"
-    
-    # Set your ticket type (must match exactly what's in the dropdown)
-    ticket_type = "General"  # Change this to match your dropdown options
-    
-    # Run the script
-    send_comp_tickets_from_csv(
-        csv_file_path=csv_file,
-        ticket_type=ticket_type,
-        delay=3  # 3 seconds between submissions
-    )
-    
-    print("\nAll tickets processed! Press Enter to close browser...")
-    input()
-    driver.quit()
+    try:
+        driver.get("https://ticketbud.com/admin/events/fe2e84b6-f627-11f0-bed6-42010a7170e9/orders/comps/new")
+        
+        input("Press Enter after logging in (only needed first time)...")
+        
+        csv_file = "test.csv"
+        ticket_type = "General"
+        
+        send_comp_tickets_from_csv(
+            csv_file_path=csv_file,
+            ticket_type=ticket_type,
+            delay=3,
+            pause_every=10
+        )
+        
+    except KeyboardInterrupt:
+        print("\n🛑 Cancelled")
+    finally:
+        print("\nClosing browser in 5 seconds...")
+        time.sleep(5)
+        driver.quit()
