@@ -5,6 +5,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import Select
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.options import Options
 
 def send_comp_tickets_from_csv(csv_file_path, ticket_type="General", delay=3, pause_every=10):
@@ -25,7 +26,32 @@ def send_comp_tickets_from_csv(csv_file_path, ticket_type="General", delay=3, pa
     print(f"📊 Total people: {len(csv_reader)}")
     print(f"⏸️  Will pause every {pause_every} submissions\n")
     
-    response = input("Ready to start? (yes/no): ").strip().lower()
+    # DEBUG: Check what ticket types are available
+    try:
+        print("🔍 Checking available ticket types...")
+        dropdown_element = driver.find_element(By.XPATH, "//select")
+        
+        # Click to open dropdown
+        dropdown_element.click()
+        time.sleep(0.5)  # Wait for dropdown to open
+        
+        dropdown = Select(dropdown_element)
+        options = [option.text for option in dropdown.options]
+        print(f"📋 Available ticket types: {options}\n")
+        
+        if ticket_type not in options:
+            print(f"⚠️  Warning: '{ticket_type}' not found in dropdown!")
+            print(f"Available options are: {options}")
+            new_type = input(f"Enter the exact ticket type name to use (or 'cancel'): ").strip()
+            if new_type.lower() == 'cancel':
+                print("❌ Cancelled")
+                return
+            ticket_type = new_type
+    except Exception as e:
+        print(f"⚠️  Could not read dropdown options: {e}")
+        print("Continuing anyway...")
+    
+    response = input("\nReady to start? (yes/no): ").strip().lower()
     if response != 'yes':
         print("❌ Cancelled")
         return
@@ -65,8 +91,12 @@ def send_comp_tickets_from_csv(csv_file_path, ticket_type="General", delay=3, pa
                 email_field.clear()
                 email_field.send_keys(email)
                 
-                # Select Ticket Type from dropdown
-                ticket_type_select = Select(driver.find_element(By.XPATH, "//select"))
+                # Select Ticket Type - Click to open dropdown first
+                dropdown_element = driver.find_element(By.XPATH, "//select")
+                dropdown_element.click()  # Open the dropdown
+                time.sleep(0.3)  # Brief wait for dropdown to open
+                
+                ticket_type_select = Select(dropdown_element)
                 ticket_type_select.select_by_visible_text(ticket_type)
                 
                 # Set Quantity
