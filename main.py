@@ -141,16 +141,16 @@ def send_comp_tickets_from_csv(driver, csv_file_path, ticket_type="General", del
                 ticket_type_select.select_by_visible_text(ticket_type)
                 time.sleep(0.3)  # Wait a bit longer for any JS to process
                 
-                # Verify quantity is 1 (read it, don't modify - it's default)
-                print("    📝 Verifying quantity is 1...")
-                try:
-                    quantity_field = driver.find_element(By.XPATH, "//input[@type='number']")
-                    qty_value = quantity_field.get_attribute("value")
-                    print(f"    ✓ Quantity field value: {qty_value}")
-                    if qty_value != "1" and qty_value != "1.0":
-                        print(f"    ⚠️  Warning: Quantity is {qty_value}, expected 1")
-                except Exception as e:
-                    print(f"    ⚠️  Could not verify quantity: {e}")
+                # Set Quantity from CSV
+                print(f"    📝 Setting Quantity to {quantity}...")
+                quantity_field = wait.until(
+                    EC.element_to_be_clickable((By.XPATH, "//input[@type='number']"))
+                )
+                highlight_element(driver, quantity_field, color="#90EE90", duration=0.2)
+                quantity_field.clear()
+                time.sleep(0.1)
+                quantity_field.send_keys(quantity)
+                time.sleep(0.2)
                 
                 # Skip comp reason and checkbox - they're already set correctly by default
                 print("    ✓ Comp reason and checkbox are already set correctly, skipping...")
@@ -160,25 +160,25 @@ def send_comp_tickets_from_csv(driver, csv_file_path, ticket_type="General", del
                 # ===== Click the "Send Comp Tickets" button =====
                 print("    🔴 Looking for 'Send Comp Tickets' button...")
                 
-                # CRITICAL: Verify quantity is still 1 right before clicking
-                print("    🔍 Final check: Verifying quantity is 1 before submitting...")
+                # CRITICAL: Verify quantity matches CSV value right before clicking
+                print(f"    🔍 Final check: Verifying quantity is {quantity} before submitting...")
                 try:
                     quantity_field_final = driver.find_element(By.XPATH, "//input[@type='number']")
                     qty_final = quantity_field_final.get_attribute("value")
                     print(f"    📊 Final quantity value: {qty_final}")
-                    if qty_final != "1" and qty_final != "1.0" and qty_final != "":
-                        print(f"    ❌ ERROR: Quantity is {qty_final}, not 1! Setting to 1...")
+                    if qty_final != quantity and qty_final != f"{quantity}.0":
+                        print(f"    ⚠️  Quantity is {qty_final}, expected {quantity}. Setting to {quantity}...")
                         quantity_field_final.clear()
                         time.sleep(0.1)
-                        quantity_field_final.send_keys("1")
+                        quantity_field_final.send_keys(quantity)
                         time.sleep(0.2)
-                        print("    ✓ Quantity set to 1")
+                        print(f"    ✓ Quantity set to {quantity}")
                     elif qty_final == "":
-                        print("    ⚠️  Quantity field is empty, setting to 1...")
-                        quantity_field_final.send_keys("1")
+                        print(f"    ⚠️  Quantity field is empty, setting to {quantity}...")
+                        quantity_field_final.send_keys(quantity)
                         time.sleep(0.2)
                     else:
-                        print("    ✓ Quantity is 1, good to go!")
+                        print(f"    ✓ Quantity is {quantity}, good to go!")
                 except Exception as qty_error:
                     print(f"    ⚠️  Could not verify/set quantity: {qty_error}")
                     print("    📌 Proceeding anyway...")
@@ -289,7 +289,7 @@ def send_comp_tickets_from_csv(driver, csv_file_path, ticket_type="General", del
                 print(f"    ⏳ Waiting {delay}s for page to process...")
                 time.sleep(delay)
                 
-                print(f"    ✅ SUCCESS: Sent 1 ticket to {first_name} {last_name}")
+                print(f"    ✅ SUCCESS: Sent {quantity} ticket(s) to {first_name} {last_name}")
                 
                 # IMPORTANT: Refresh the page to get a clean form for the next person
                 # This ensures all fields (Ticket Type, Quantity) are present
@@ -297,7 +297,7 @@ def send_comp_tickets_from_csv(driver, csv_file_path, ticket_type="General", del
                 driver.get(base_url)
                 time.sleep(2)  # Wait for page to fully load
                 successful += 1
-                total_tickets += 1  # Always 1 ticket per person
+                total_tickets += int(quantity)
                 
             except Exception as e:
                 print(f"    ❌ Error: {str(e)}")
@@ -354,11 +354,11 @@ if __name__ == "__main__":
     driver = webdriver.Chrome(options=chrome_options)
     
     try:
-        driver.get("https://ticketbud.com/admin/events/fe2e84b6-f627-11f0-bed6-42010a7170e9/orders/comps/new")
+        driver.get("https://ticketbud.com/admin/events/7f49895a-f629-11f0-9117-42010a7170e9/orders/comps/new")
         
         input("Press Enter after logging in (only needed first time)...")
         
-        csv_file = "test.csv"
+        csv_file = "Ticket.csv"
         ticket_type = "General"
         
         send_comp_tickets_from_csv(
